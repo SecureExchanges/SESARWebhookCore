@@ -20,6 +20,12 @@ namespace SESARWebHook.API
     {
       var builder = WebApplication.CreateBuilder(args);
 
+      // Permet l'execution comme service Windows. Sans effet lorsque l'application est lancee
+      // en console. Fixe aussi le repertoire de base sur le dossier de l'executable : sans cela,
+      // un service demarre avec C:\Windows\System32 comme repertoire courant et ne trouverait
+      // ni appsettings.json ni connectors.secrets.json.
+      builder.Host.UseWindowsService();
+
       // Configure JSON serializer to match SESAR's format
       builder.Services.AddControllers()
           .AddNewtonsoftJson(options =>

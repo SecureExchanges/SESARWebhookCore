@@ -9,6 +9,7 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <PackageReference Include="MimeKit" Version="4.16.0" />
     <PackageReference Include="SecureExchanges.NetCore" Version="26.4.20.2" />
   </ItemGroup>
 

@@ -12,7 +12,18 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <!-- En developpement, connectors.secrets.json se place a la racine de ce projet et suit
+         vers le dossier de sortie, ou l'application le cherche par defaut. Il n'est jamais
+         publie : aucun paquet livre ne doit contenir de secret. -->
+    <None Update="connectors.secrets.json" Condition="Exists('connectors.secrets.json')">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <CopyToPublishDirectory>Never</CopyToPublishDirectory>
+    </None>
+  </ItemGroup>
+
+  <ItemGroup>
     <PackageReference Include="Microsoft.AspNetCore.Mvc.NewtonsoftJson" Version="9.0.0" />
+    <PackageReference Include="Microsoft.Extensions.Hosting.WindowsServices" Version="9.0.0" />
     <PackageReference Include="Newtonsoft.Json" Version="13.0.3" />
     <PackageReference Include="SecureExchanges.NetCore" Version="26.4.20.2" />
   </ItemGroup>
@@ -24,7 +35,6 @@
     <ProjectReference Include="..\SESARWebHook.Connectors.Template.NetCore\SESARWebHook.Connectors.Template.NetCore.csproj" />
     <ProjectReference Include="..\SESARWebHook.Connectors.ZohoCRM.NetCore\SESARWebHook.Connectors.ZohoCRM.NetCore.csproj" />
     <ProjectReference Include="..\SESARWebHook.Core.NetCore\SESARWebHook.Core.NetCore.csproj" />
-    <ProjectReference Include="..\SESARWebHook.Tests.NetCore\SESARWebHook.Tests.NetCore.csproj" />
   </ItemGroup>
 
 </Project>

@@ -88,3 +88,5 @@ _ReSharper*/
 *.tmp
 
 connectors.secrets.json
+# Paquets d installation produits par deploy/Build-Package.ps1
+deploy/artifacts/

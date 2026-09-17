@@ -19,8 +19,16 @@ namespace SESARWebHook.Core.Models
     public string Message { get; set; }
 
     /// <summary>
-    /// Error details if the operation failed
+    /// Error details if the operation failed.
+    ///
+    /// USAGE INTERNE UNIQUEMENT : journalise cote serveur, jamais renvoye a l'appelant.
+    /// Ce champ contient des traces d'exception, des chemins de fichiers et des reponses brutes
+    /// de systemes tiers. Les deux attributs JsonIgnore garantissent qu'il ne peut pas etre
+    /// serialise dans une reponse HTTP, quel que soit le serialiseur utilise (l'API utilise
+    /// Newtonsoft, d'autres projets System.Text.Json).
     /// </summary>
+    [Newtonsoft.Json.JsonIgnore]
+    [System.Text.Json.Serialization.JsonIgnore]
     public string ErrorDetails { get; set; }
 
     /// <summary>
