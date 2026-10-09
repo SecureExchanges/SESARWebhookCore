@@ -109,7 +109,12 @@ namespace SESARWebHook.Core.Configuration
 
       if (IsPlainTextJson(fileBytes))
       {
-        string fileContent = Encoding.UTF8.GetString(fileBytes);
+        // Encoding.UTF8.GetString conserve la marque d'ordre des octets (BOM) en tete de la
+        // chaine, et le desserialiseur JSON la refuse. Les editeurs Windows et PowerShell
+        // ecrivent couramment un BOM : on le retire avant lecture, sans quoi un fichier de
+        // secrets parfaitement valide serait rejete et les cles resteraient introuvables.
+        int start = HasUtf8Bom(fileBytes) ? 3 : 0;
+        string fileContent = Encoding.UTF8.GetString(fileBytes, start, fileBytes.Length - start);
         var config = JsonConvert.DeserializeObject<ConnectorsSecretsConfig>(fileContent);
 
         ProtectAndSave(filePath, fileContent, entropy);
@@ -137,20 +142,22 @@ namespace SESARWebHook.Core.Configuration
       }
     }
 
+    /// <summary>Vrai si le contenu commence par une marque d'ordre des octets UTF-8.</summary>
+    private static bool HasUtf8Bom(byte[] fileBytes)
+    {
+      return fileBytes != null &&
+             fileBytes.Length >= 3 &&
+             fileBytes[0] == 0xEF &&
+             fileBytes[1] == 0xBB &&
+             fileBytes[2] == 0xBF;
+    }
+
     private static bool IsPlainTextJson(byte[] fileBytes)
     {
       if (fileBytes == null || fileBytes.Length == 0)
         return false;
 
-      int offset = 0;
-
-      if (fileBytes.Length >= 3 &&
-          fileBytes[0] == 0xEF &&
-          fileBytes[1] == 0xBB &&
-          fileBytes[2] == 0xBF)
-      {
-        offset = 3;
-      }
+      int offset = HasUtf8Bom(fileBytes) ? 3 : 0;
 
       while (offset < fileBytes.Length)
       {

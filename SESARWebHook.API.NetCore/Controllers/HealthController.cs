@@ -49,15 +49,15 @@ namespace SESARWebHook.API.Controllers
         secretsPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "connectors.secrets.json");
       }
 
+      // Diagnostics reduits a des booleens : le chemin du fichier de secrets, le repertoire
+      // d'installation, l'identite du compte de service et le nom de la machine sont des
+      // informations de reconnaissance et n'ont pas a sortir du poste. Ce point de terminaison
+      // n'est pas authentifie. Le detail complet reste dans le journal au demarrage.
       var secretsDiag = new
       {
-        ExpectedPath = secretsPath,
-        FileExists = System.IO.File.Exists(secretsPath),
-        AppBaseDirectory = AppDomain.CurrentDomain.BaseDirectory,
+        SecretsFileFound = System.IO.File.Exists(secretsPath),
         FileEntropyConfigured = !string.IsNullOrEmpty(_appConfig["FileEntropy"]),
-        DataProtectionScope = _appConfig["DataProtectionScope"] ?? "CurrentUser (default)",
-        IISUser = Environment.UserName,
-        MachineName = Environment.MachineName
+        DataProtectionScope = _appConfig["DataProtectionScope"] ?? "CurrentUser (default)"
       };
 
       return Ok(new
@@ -68,7 +68,9 @@ namespace SESARWebHook.API.Controllers
         Configuration = new
         {
           ProcessorInitialized = processor != null,
-          InitializationError = _config.InitializationError,
+          // InitializationError contient des messages d'exception et des chemins de fichiers :
+          // on n'expose que le fait qu'une erreur existe.
+          HasInitializationError = !string.IsNullOrEmpty(_config.InitializationError),
           DefaultConnector = _appConfig["DefaultConnectorId"] ?? "filesystem",
           DetailedLogging = _appConfig["EnableDetailedLogging"] ?? "false"
         },

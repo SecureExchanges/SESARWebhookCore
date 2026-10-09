@@ -1,5 +1,6 @@
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.Logging;
 using Newtonsoft.Json;
 using SecureExchangesSDK.Models.Transport;
 using SESARWebHook.Core.Models;
@@ -20,13 +21,24 @@ namespace SESARWebHook.API.Controllers
   [Route("api/webhook")]
   public class WebhookController : ControllerBase
   {
+    /// <summary>
+    /// Message unique renvoye pour tout echec de traitement.
+    ///
+    /// Volontairement non specifique : distinguer "dechiffrement echoue" de "fichier introuvable"
+    /// fournirait a un appelant non authentifie un oracle sur le contenu du payload et sur le
+    /// systeme de fichiers. Le detail reel est journalise cote serveur.
+    /// </summary>
+    private const string GenericFailureMessage = "Le traitement de la requete a echoue.";
+
     private readonly StartupConfig _config;
     private readonly IConfiguration _appConfig;
+    private readonly ILogger<WebhookController> _logger;
 
-    public WebhookController(StartupConfig config, IConfiguration appConfig)
+    public WebhookController(StartupConfig config, IConfiguration appConfig, ILogger<WebhookController> logger)
     {
       _config = config;
       _appConfig = appConfig;
+      _logger = logger;
     }
 
     [HttpPost("")]
@@ -303,12 +315,39 @@ namespace SESARWebHook.API.Controllers
 
       if (result.Success)
       {
+        if (result.ItemsProcessed == 0)
+        {
+          // Succes sans action (ex. manifest sans destinataire de redirection) : en avertissement,
+          // pour rester visible dans le journal Windows quand le service tourne sans console.
+          _logger.LogWarning(
+              "Webhook traite sans action. Connecteur={ConnectorId} Message={Message}",
+              connectorId, result.Message);
+        }
+        else
+        {
+          _logger.LogInformation(
+              "Webhook traite. Connecteur={ConnectorId} Message={Message} Traites={ItemsProcessed}",
+              connectorId, result.Message, result.ItemsProcessed);
+        }
         return Ok(result);
       }
-      else
+
+      // Journal serveur : c'est ici que le detail des echecs (fichier manquant, dechiffrement en
+      // echec, .eml non ecrit) est visible. SESAR ne lit pas le corps de la reponse : sur un 500,
+      // il conserve son fichier de file d'attente et reessaie a la prochaine boucle.
+      _logger.LogError(
+          "Echec du webhook. Connecteur={ConnectorId} Message={Message} Echecs={ItemsFailed} Detail={ErrorDetails}",
+          connectorId, result.Message, result.ItemsFailed, result.ErrorDetails);
+
+      // Reponse a l'appelant : message generique. Le Message du connecteur contient des chemins
+      // de fichiers et l'echec de validation de la HashKey passe aussi par ici : un appelant non
+      // authentifie ne doit obtenir aucune information sur le systeme ni sur la cause du refus.
+      return StatusCode(500, new
       {
-        return StatusCode(500, result);
-      }
+        Success = false,
+        Message = GenericFailureMessage,
+        ConnectorId = connectorId
+      });
     }
   }
 }

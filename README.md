@@ -144,7 +144,7 @@ Export-PfxCertificate -Cert $cert -FilePath "PATH_TO_THE_KEY" -Password $pwd
 
 | Connector | ID | Description |
 |-----------|-----|-------------|
-| FileSystem | `filesystem` | Writes manifests to disk (debug/test) |
+| FileSystem | `filesystem` | Decrypts each exchange (body and files) and re-sends it through Secure Exchanges to the address given in the manifest `CallBackParameter` |
 | Zoho CRM | `zoho-crm` | Creates records in Zoho CRM |
 | SharePoint | `sharepoint` | Uploads documents to SharePoint Online |
 | Dynamics 365 | `dynamics` | Creates entities in Dynamics 365 |
@@ -152,6 +152,41 @@ Export-PfxCertificate -Cert $cert -FilePath "PATH_TO_THE_KEY" -Password $pwd
 **Option B: Custom Connector** (implement your own logic)
 
 Create a class that extends `IIntegrationConnector`, compile it as a DLL, and drop it in the `/Connectors/` folder. The framework loads it automatically.
+
+### FileSystem Connector (`filesystem`)
+
+Re-sends the exchange, as it was received, to someone else through Secure Exchanges. The sender chooses the destination at send time by putting it in the message's **CallBackParameters**; SESAR hands that string back to the webhook as `CallBackParameter` in the manifest. `OutputPath` is only a temporary work folder, wiped after every send; nothing stays on disk.
+
+Accepted forms of the parameter (the key is `RecipientParameterKey`, default `RedirectionEmail`):
+
+```text
+destinataire@exemple.test
+[{"Key":"RedirectionEmail","Value":"destinataire@exemple.test"}]
+{"RedirectionEmail":"destinataire@exemple.test"}
+dossier=42;RedirectionEmail=destinataire@exemple.test
+```
+
+For each webhook the connector validates the address, decrypts the body (`EmailSent.html`) and the `.secf` files into a private work folder, sends everything with the SDK (`MessageHelper.MultiRecipientMessage`, see [Send with files](https://help.secure-exchanges.com/articles/en/messaging/send-with-files.html)), then deletes the work folder. A manifest without a `RedirectionEmail` entry is answered with success and nothing is done (`Forwarded: false`). If an address is given but malformed, or if any file or the body cannot be recovered, **nothing is sent** and the webhook fails so SESAR retries. Any well-formed address is accepted: the destination is entirely chosen by whoever sets the CallBackParameters.
+
+After a successful send, the connector deletes the SESAR exchange folder (`manifest.DirectoryPath`, manifest included) and sends a notification through Secure Exchanges to `NotificationEmails`. Both are best effort: once the email is out, a failure there is reported as a warning in the result, never as a webhook failure (SESAR would otherwise retry and the recipient would get a duplicate). The deletion refuses paths that are not absolute, that sit less than two levels below a drive root, that lie outside `SesarStoreRoot` when it is set, or that do not contain every file of the manifest.
+
+Secrets (`connectors.secrets.json`, `Connectors:filesystem:Secrets`): `Serial`, `ApiUser`, `ApiPassword` (GUIDs from your Secure Exchanges business account), `NotificationEmails` (comma-separated list, empty for none), optionally a connector-specific `PrivateAESKey`.
+
+Settings (`appsettings.json`, `Connector:filesystem`):
+
+| Setting | Default | Purpose |
+|---------|---------|---------|
+| `OutputPath` | `C:\SESARWebHook\Output\` | Work folder where files are decrypted during the send, always wiped afterwards |
+| `DeleteSourceAfterForward` | `true` | Delete the SESAR exchange folder (manifest included) after a successful send |
+| `SesarStoreRoot` | empty | Absolute path of the SESAR store; when set, only exchange folders strictly under it can be deleted |
+| `EndPointUri` | `https://www.secure-exchanges.com/_api/0217/0217.asmx` | API endpoint. https required; http is accepted only for a loopback address (localhost, 127.0.0.1) to test against a local Secure Exchanges server. `appsettings.Development.json` overrides it with a local URL when running with `ASPNETCORE_ENVIRONMENT=Development` |
+| `CultureID` | `fr-CA` | Language of the notification sent to the recipient |
+| `MaximumOpenTime` | `5` | Openings allowed before the message is destroyed (1 to 99) |
+| `MinutesExpiration` | `20160` | Message lifetime in minutes (14 days) |
+| `ShowSubject` / `GetNotify` | `true` / `false` | Show the subject in the notification / notify the API account owner on opening |
+| `MaxTotalSizeBytes` | `2684354560` | Refuse sends whose files total more than this (SDK limit: 2.5 GB) |
+| `RecipientParameterKey` | `RedirectionEmail` | Key looked up in a structured `CallBackParameter` |
+| `SenderName` | empty | Sender name shown by Secure Exchanges; empty reuses the original sender's address |
 
 ### Project Structure
 
@@ -195,7 +230,7 @@ SESARWebHookCore/
 │   │   ├── HandlerRegistry.cs                # Dynamic DLL loading
 │   │   └── WebhookProcessor.cs               # Decrypt & route webhooks
 │   └── WebhookHandlerBase.cs                 # Base class with helpers
-├── SESARWebHook.Connectors.FileSystem/       # Example: File system
+├── SESARWebHook.Connectors.FileSystem/       # Decrypts and re-sends the exchange through Secure Exchanges
 ├── SESARWebHook.Connectors.ZohoCRM/          # Example: Zoho CRM
 ├── SESARWebHook.Connectors.SharePoint/       # Example: SharePoint Online
 ├── SESARWebHook.Connectors.Dynamics/         # Example: Dynamics 365

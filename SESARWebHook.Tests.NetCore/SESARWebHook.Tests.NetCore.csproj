@@ -19,6 +19,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\SESARWebHook.Core.NetCore\SESARWebHook.Core.NetCore.csproj" />
+    <ProjectReference Include="..\SESARWebHook.Connectors.FileSystem.NetCore\SESARWebHook.Connectors.FileSystem.NetCore.csproj" />
   </ItemGroup>
 
 </Project>
